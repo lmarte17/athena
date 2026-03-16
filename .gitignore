@@ -1,0 +1,66 @@
+# ── Project-specific exclusions ──────────────────────────────────────────────
+.build_docs/
+.claude/
+demo/
+docs/
+live_use_code.py
+
+# ── Secrets & environment ─────────────────────────────────────────────────────
+.env
+*.env
+!.env.example
+
+# OAuth / credential files that may land locally
+credentials.json
+token.json
+*-token.json
+gog-tokens.json
+client_secret*.json
+service_account*.json
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# ── SQLite databases (runtime data, not source) ───────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+
+# ── Rust / Tauri ──────────────────────────────────────────────────────────────
+target/
+Cargo.lock
+
+# Generated Tauri schemas (produced at build time)
+apps/tray/src-tauri/gen/
+
+# ── macOS ─────────────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+*.swp
+*.swo
+
+# ── IDEs ──────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.iml
+
+# ── Logs & temp ───────────────────────────────────────────────────────────────
+*.log
+*.tmp
+/tmp/

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Athena",
+  "version": "0.1.0",
+  "identifier": "com.athena.tray",
+  "build": {
+    "frontendDist": "../src"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [],
+    "security": {
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost ws://localhost:8000 ws://127.0.0.1:8000;"
+    }
+  },
+  "bundle": {
+    "active": false
+  }
+}

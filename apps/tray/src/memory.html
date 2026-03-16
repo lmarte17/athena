@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>What Athena Knows</title>
+    <style>
+      :root {
+        --bg: #0f1418;
+        --panel: #1a2127;
+        --border: rgba(255, 255, 255, 0.08);
+        --text: #ecf2f8;
+        --muted: #94a6b8;
+        --good: #35c88a;
+        --warn: #efb544;
+        --bad: #eb6a5b;
+        --accent: #4a9eda;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        background: radial-gradient(120% 120% at 90% 5%, #1c2f3f 0%, var(--bg) 55%);
+        color: var(--text);
+        font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        padding: 20px;
+        min-height: 100vh;
+      }
+      h1 {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 4px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .subtitle {
+        color: var(--muted);
+        font-size: 12px;
+        margin-bottom: 20px;
+      }
+      .section {
+        background: linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 14px;
+      }
+      .section-title {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 12px;
+      }
+      .profile-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .profile-table tr + tr td {
+        border-top: 1px solid var(--border);
+      }
+      .profile-table td {
+        padding: 7px 0;
+        vertical-align: top;
+      }
+      .profile-key {
+        color: var(--muted);
+        font-size: 12px;
+        width: 140px;
+        padding-right: 12px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .profile-value {
+        color: var(--text);
+        word-break: break-word;
+      }
+      .profile-actions {
+        text-align: right;
+        width: 60px;
+      }
+      .btn-forget {
+        border: 1px solid rgba(235, 106, 91, 0.4);
+        background: rgba(235, 106, 91, 0.1);
+        color: var(--bad);
+        border-radius: 6px;
+        padding: 2px 8px;
+        font: 11px/1.4 inherit;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      .btn-forget:hover {
+        background: rgba(235, 106, 91, 0.25);
+      }
+      details {
+        margin-bottom: 8px;
+      }
+      summary {
+        cursor: pointer;
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 600;
+        padding: 4px 0;
+        list-style: none;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        user-select: none;
+      }
+      summary::before {
+        content: "▶";
+        font-size: 9px;
+        color: var(--muted);
+        transition: transform 0.15s;
+      }
+      details[open] summary::before {
+        transform: rotate(90deg);
+      }
+      .session-content {
+        margin-top: 8px;
+        padding: 10px;
+        background: rgba(0,0,0,0.2);
+        border-radius: 8px;
+        font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: #c0d2e2;
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 300px;
+        overflow-y: auto;
+      }
+      .empty {
+        color: var(--muted);
+        font-style: italic;
+        font-size: 12px;
+        padding: 4px 0;
+      }
+      .footer-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 6px;
+      }
+      .btn-clear {
+        border: 1px solid rgba(235, 106, 91, 0.4);
+        background: rgba(235, 106, 91, 0.08);
+        color: var(--bad);
+        border-radius: 8px;
+        padding: 7px 14px;
+        font: 12px/1 inherit;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      .btn-clear:hover { background: rgba(235, 106, 91, 0.2); }
+      .btn-refresh {
+        border: 1px solid var(--border);
+        background: rgba(255,255,255,0.04);
+        color: var(--muted);
+        border-radius: 8px;
+        padding: 7px 14px;
+        font: 12px/1 inherit;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      .btn-refresh:hover { background: rgba(255,255,255,0.08); }
+      #status-msg {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 8px;
+        min-height: 16px;
+      }
+      #status-msg.ok { color: var(--good); }
+      #status-msg.err { color: var(--bad); }
+    </style>
+  </head>
+  <body>
+    <h1>🧠 What Athena Knows</h1>
+    <p class="subtitle">Memory snapshot from ~/.athena — updated after each session</p>
+
+    <div id="profile-section" class="section">
+      <div class="section-title">Profile</div>
+      <div id="profile-content"><span class="empty">Loading…</span></div>
+    </div>
+
+    <div id="commitments-section" class="section">
+      <div class="section-title">Commitments</div>
+      <div id="commitments-content"><span class="empty">Loading…</span></div>
+    </div>
+
+    <div id="sessions-section" class="section">
+      <div class="section-title">Recent Sessions</div>
+      <div id="sessions-content"><span class="empty">Loading…</span></div>
+    </div>
+
+    <div class="footer-actions">
+      <button class="btn-clear" id="btn-clear">Clear all memory</button>
+      <button class="btn-refresh" id="btn-refresh">Refresh</button>
+    </div>
+    <p id="status-msg"></p>
+
+    <script>
+      const tauri = window.__TAURI__;
+
+      // ── Simple YAML key extractor (handles flat profile.yaml keys) ─────────
+      function extractProfileRows(yaml) {
+        const rows = [];
+        const privateKeys = new Set(["_confidence", "updated"]);
+        for (const line of yaml.split("\n")) {
+          const m = line.match(/^([a-zA-Z][a-zA-Z0-9_]*):\s*(.*)/);
+          if (!m || privateKeys.has(m[1])) continue;
+          rows.push({ key: m[1], value: m[2].trim() });
+        }
+        return rows;
+      }
+
+      function showStatus(msg, kind = "") {
+        const el = document.getElementById("status-msg");
+        el.textContent = msg;
+        el.className = kind;
+      }
+
+      async function load() {
+        try {
+          const snap = await tauri.core.invoke("get_memory_snapshot");
+          renderProfile(snap.profile_yaml);
+          renderCommitments(snap.commitments || []);
+          renderSessions(snap.sessions);
+        } catch (err) {
+          showStatus("Could not load memory: " + err, "err");
+        }
+      }
+
+      function renderProfile(yaml) {
+        const el = document.getElementById("profile-content");
+        const rows = extractProfileRows(yaml);
+
+        if (rows.length === 0) {
+          el.innerHTML = `<span class="empty">No profile facts yet. Have a few sessions with Athena!</span>`;
+          return;
+        }
+
+        const table = document.createElement("table");
+        table.className = "profile-table";
+        for (const { key, value } of rows) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td class="profile-key">${escHtml(key)}</td>
+            <td class="profile-value">${escHtml(value || "(empty)")}</td>
+            <td class="profile-actions">
+              <button class="btn-forget" data-key="${escHtml(key)}">forget</button>
+            </td>`;
+          table.appendChild(tr);
+        }
+        el.innerHTML = "";
+        el.appendChild(table);
+
+        el.querySelectorAll(".btn-forget").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const key = btn.dataset.key;
+            btn.disabled = true;
+            btn.textContent = "…";
+            try {
+              await tauri.core.invoke("forget_profile_key", { key });
+              showStatus(`Forgot: ${key}`, "ok");
+              await load();
+            } catch (err) {
+              showStatus("Error: " + err, "err");
+              btn.disabled = false;
+              btn.textContent = "forget";
+            }
+          });
+        });
+      }
+
+      function renderCommitments(items) {
+        const el = document.getElementById("commitments-content");
+        const openItems = (items || []).filter((item) => item.status !== "done");
+        if (openItems.length === 0) {
+          el.innerHTML = `<span class="empty">No active commitments.</span>`;
+          return;
+        }
+
+        const list = document.createElement("div");
+        for (const item of openItems) {
+          const row = document.createElement("div");
+          row.style.padding = "6px 0";
+          row.style.borderTop = "1px solid var(--border)";
+          row.innerHTML = `<span class="profile-value">${escHtml(item.text)}</span>`;
+          list.appendChild(row);
+        }
+        el.innerHTML = "";
+        el.appendChild(list);
+      }
+
+      function renderSessions(sessions) {
+        const el = document.getElementById("sessions-content");
+        if (!sessions || sessions.length === 0) {
+          el.innerHTML = `<span class="empty">No session summaries yet.</span>`;
+          return;
+        }
+        el.innerHTML = "";
+        for (const s of sessions) {
+          const details = document.createElement("details");
+          const label = s.filename.replace(/\.md$/, "");
+          details.innerHTML = `
+            <summary>${escHtml(label)}</summary>
+            <pre class="session-content">${escHtml(s.content)}</pre>`;
+          el.appendChild(details);
+        }
+      }
+
+      function escHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      document.getElementById("btn-clear").addEventListener("click", async () => {
+        if (!confirm("Clear ALL memory? Sessions will be archived, profile will be reset.")) return;
+        try {
+          await tauri.core.invoke("clear_memory");
+          showStatus("Memory cleared.", "ok");
+          await load();
+        } catch (err) {
+          showStatus("Error: " + err, "err");
+        }
+      });
+
+      document.getElementById("btn-refresh").addEventListener("click", async () => {
+        showStatus("Refreshing…");
+        await load();
+        showStatus("Done.", "ok");
+        setTimeout(() => showStatus(""), 1500);
+      });
+
+      load();
+    </script>
+  </body>
+</html>
