@@ -74,6 +74,7 @@ pub struct AudioEngine {
 impl AudioEngine {
     pub fn start(
         talk_enabled: Arc<AtomicBool>,
+        muted: Arc<AtomicBool>,
         transport: WsTransport,
         athena_playing: Arc<AtomicBool>,
         user_speaking: Arc<AtomicBool>,
@@ -122,6 +123,7 @@ impl AudioEngine {
                 &input_device,
                 &input_config,
                 talk_enabled,
+                muted,
                 transport,
                 athena_playing,
                 user_speaking.clone(),
@@ -130,6 +132,7 @@ impl AudioEngine {
                 &input_device,
                 &input_config,
                 talk_enabled,
+                muted,
                 transport,
                 athena_playing,
                 user_speaking.clone(),
@@ -138,6 +141,7 @@ impl AudioEngine {
                 &input_device,
                 &input_config,
                 talk_enabled,
+                muted,
                 transport,
                 athena_playing,
                 user_speaking.clone(),
@@ -316,39 +320,43 @@ fn build_input_stream_f32(
     device: &cpal::Device,
     config: &StreamConfig,
     talk_enabled: Arc<AtomicBool>,
+    muted: Arc<AtomicBool>,
     transport: WsTransport,
     athena_playing: Arc<AtomicBool>,
     user_speaking: Arc<AtomicBool>,
 ) -> Result<Stream, cpal::BuildStreamError> {
-    build_input_stream(device, config, talk_enabled, transport, athena_playing, user_speaking, |sample| sample)
+    build_input_stream(device, config, talk_enabled, muted, transport, athena_playing, user_speaking, |sample| sample)
 }
 
 fn build_input_stream_i16(
     device: &cpal::Device,
     config: &StreamConfig,
     talk_enabled: Arc<AtomicBool>,
+    muted: Arc<AtomicBool>,
     transport: WsTransport,
     athena_playing: Arc<AtomicBool>,
     user_speaking: Arc<AtomicBool>,
 ) -> Result<Stream, cpal::BuildStreamError> {
-    build_input_stream(device, config, talk_enabled, transport, athena_playing, user_speaking, i16_to_f32)
+    build_input_stream(device, config, talk_enabled, muted, transport, athena_playing, user_speaking, i16_to_f32)
 }
 
 fn build_input_stream_u16(
     device: &cpal::Device,
     config: &StreamConfig,
     talk_enabled: Arc<AtomicBool>,
+    muted: Arc<AtomicBool>,
     transport: WsTransport,
     athena_playing: Arc<AtomicBool>,
     user_speaking: Arc<AtomicBool>,
 ) -> Result<Stream, cpal::BuildStreamError> {
-    build_input_stream(device, config, talk_enabled, transport, athena_playing, user_speaking, u16_to_f32)
+    build_input_stream(device, config, talk_enabled, muted, transport, athena_playing, user_speaking, u16_to_f32)
 }
 
 fn build_input_stream<S, F>(
     device: &cpal::Device,
     config: &StreamConfig,
     talk_enabled: Arc<AtomicBool>,
+    muted: Arc<AtomicBool>,
     transport: WsTransport,
     athena_playing: Arc<AtomicBool>,
     user_speaking: Arc<AtomicBool>,
@@ -379,6 +387,17 @@ where
         config,
         move |data: &[S], _| {
             if !talk_enabled.load(Ordering::Relaxed) {
+                return;
+            }
+
+            if muted.load(Ordering::Relaxed) {
+                // Cleanly end any active speech turn so the server doesn't hang.
+                if in_speech {
+                    in_speech = false;
+                    is_barge_in = false;
+                    user_speaking.store(false, Ordering::Relaxed);
+                    transport.send_activity_end();
+                }
                 return;
             }
 

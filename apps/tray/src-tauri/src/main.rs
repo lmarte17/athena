@@ -111,6 +111,7 @@ pub enum ConnectionStatus {
 struct AppState {
     status: Arc<RwLock<ConnectionStatus>>,
     talk_enabled: Arc<AtomicBool>,
+    muted: Arc<AtomicBool>,
     athena_playing: Arc<AtomicBool>,
     user_speaking: Arc<AtomicBool>,
     session_active: AtomicBool,
@@ -197,6 +198,42 @@ fn draw_disc(buffer: &mut [u8], size: u32, cx: i32, cy: i32, radius: i32, color:
     }
 }
 
+fn build_tray_menu<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    muted: bool,
+    screen_names: &[String],
+) -> tauri::Result<tauri::menu::Menu<R>> {
+    let mute_label = if muted { "Unmute mic" } else { "Mute mic" };
+    let mute_item = MenuItemBuilder::with_id("mute_toggle", mute_label).build(app)?;
+
+    let screen_items: Vec<_> = screen_names
+        .iter()
+        .enumerate()
+        .map(|(i, name)| MenuItemBuilder::with_id(format!("screen_{i}"), name).build(app))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut screen_sub = SubmenuBuilder::new(app, "Share screen");
+    for item in &screen_items {
+        screen_sub = screen_sub.item(item);
+    }
+    let screen_submenu = screen_sub.build()?;
+
+    let memory_view_item =
+        MenuItemBuilder::with_id("memory_view", "What does Athena know?").build(app)?;
+    let memory_clear_item =
+        MenuItemBuilder::with_id("memory_clear", "Clear all memory").build(app)?;
+    let quit_item = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
+
+    MenuBuilder::new(app)
+        .item(&mute_item)
+        .item(&screen_submenu)
+        .item(&PredefinedMenuItem::separator(app)?)
+        .item(&memory_view_item)
+        .item(&memory_clear_item)
+        .item(&PredefinedMenuItem::separator(app)?)
+        .item(&quit_item)
+        .build()
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
@@ -207,11 +244,13 @@ fn main() {
         .setup(|app| {
             let status = Arc::new(RwLock::new(ConnectionStatus::Disconnected));
             let talk_enabled = Arc::new(AtomicBool::new(false));
+            let muted = Arc::new(AtomicBool::new(false));
             let athena_playing = Arc::new(AtomicBool::new(false));
             let user_speaking = Arc::new(AtomicBool::new(false));
             let transport = WsTransport::default();
             let audio_engine = AudioEngine::start(
                 talk_enabled.clone(),
+                muted.clone(),
                 transport.clone(),
                 athena_playing.clone(),
                 user_speaking.clone(),
@@ -227,6 +266,7 @@ fn main() {
             app.manage(AppState {
                 status,
                 talk_enabled,
+                muted,
                 athena_playing,
                 user_speaking,
                 session_active: AtomicBool::new(false),
@@ -238,31 +278,8 @@ fn main() {
                 selected_display,
             });
 
-            // Build a "Share screen" submenu with one item per connected display.
             let screen_names = screen::list_screen_names();
-            let screen_items: Vec<_> = screen_names
-                .iter()
-                .enumerate()
-                .map(|(i, name)| MenuItemBuilder::with_id(format!("screen_{i}"), name).build(app))
-                .collect::<Result<Vec<_>, _>>()?;
-            let mut screen_sub = SubmenuBuilder::new(app, "Share screen");
-            for item in &screen_items {
-                screen_sub = screen_sub.item(item);
-            }
-            let screen_submenu = screen_sub.build()?;
-
-            let memory_view_item =
-                MenuItemBuilder::with_id("memory_view", "What does Athena know?").build(app)?;
-            let memory_clear_item =
-                MenuItemBuilder::with_id("memory_clear", "Clear all memory").build(app)?;
-            let quit_item = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
-            let tray_menu = MenuBuilder::new(app)
-                .item(&screen_submenu)
-                .item(&memory_view_item)
-                .item(&memory_clear_item)
-                .item(&PredefinedMenuItem::separator(app)?)
-                .item(&quit_item)
-                .build()?;
+            let tray_menu = build_tray_menu(app.handle(), false, &screen_names)?;
 
             let tray_builder = TrayIconBuilder::with_id(TRAY_ID)
                 .menu(&tray_menu)
@@ -279,6 +296,18 @@ fn main() {
                         return;
                     }
                     match id {
+                    "mute_toggle" => {
+                        let state = app.state::<AppState>();
+                        let was_muted = state.muted.fetch_xor(true, Ordering::Relaxed);
+                        let now_muted = !was_muted;
+                        eprintln!("[athena] mic {}", if now_muted { "muted" } else { "unmuted" });
+                        let screen_names = screen::list_screen_names();
+                        if let Ok(new_menu) = build_tray_menu(app, now_muted, &screen_names) {
+                            if let Some(tray) = app.tray_by_id(TRAY_ID) {
+                                let _ = tray.set_menu(Some(new_menu));
+                            }
+                        }
+                    }
                     "quit" => app.exit(0),
                     "memory_view" => {
                         // Focus the existing window if already open, otherwise create it.
@@ -320,6 +349,13 @@ fn main() {
                         if !active {
                             shared.session_active.store(true, Ordering::Relaxed);
                             shared.talk_enabled.store(true, Ordering::Relaxed);
+                            shared.muted.store(false, Ordering::Relaxed);
+                            let screen_names = screen::list_screen_names();
+                            if let Ok(menu) = build_tray_menu(app, false, &screen_names) {
+                                if let Some(tray) = app.tray_by_id(TRAY_ID) {
+                                    let _ = tray.set_menu(Some(menu));
+                                }
+                            }
                             apply_connection_status(
                                 app,
                                 &shared.status,
